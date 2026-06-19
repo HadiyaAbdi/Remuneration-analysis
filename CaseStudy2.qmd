@@ -1,0 +1,269 @@
+---
+title: "Case Study two: Remuneration across Races and Regions"
+format:
+  html:
+    embed-resources: true
+    code-fold: true
+    code-summary: "Show code"
+author: Hadiya Cabdi
+editor: source
+bibliography: refrence.bib
+---
+
+# Intro:
+
+In this case study we will be examining subset of data from 1988 CPS(The Current Population Survey). It provides information about general activities and characteristics of U.S. labor force. It includes the following terms as columns: 
+- Wages(in dollars)
+- Education(in years)
+- Experience(in years)
+- Black(indicator factor with yes and no)
+- SMSA(a factor with levels yes and no)
+- region(a factor with levels "MW", "NE", "S", and "W"). 
+
+The data-set contains weekly wages in 1987 for a sample of 25,632 males between the ages 18 - 70. [@StatisticalSleuth]
+
+### Primary Goal:
+
+The primary goal of this Case study is to answer:
+
+- Q1: What is the pay gap between Black male workers and non-Black male workers in each geographic region?
+- Q2: Does the magnitude of the pay gap between Black male and non-Black male workers differ across regions?
+
+Our controls will be Education, and Experience to make the comparison fairer, and to potentially see the actual gap without other factors effecting it. 
+
+### Process:
+
+First step is to always load our packages and run our data:
+```{r}
+#| message: false         
+#| warning: false         
+#| error: false  
+
+library(car)
+library(ggplot2)
+library(tidyverse)
+library(performance)
+library(see)
+library(Sleuth2) # install.packages("Sleuth2") in the R console if needed
+CPS_1988_wages <- Sleuth2::ex1029
+```
+
+#### Wrangling data:
+
+We will have to check for any NA variables that need to be cleaned out from the data, and we check that by: 
+```{r}
+#| message: false         
+#| warning: false         
+#| error: false  
+
+any(is.na(CPS_1988_wages))
+```
+This shows that the data doesn't include any empty values. 
+
+### Check for Regression Assumptions:
+
+To check if the model passes the Variance and regression assumption we will first create and additive model, assuming the wage gap is the same across all regions:
+
+- The factor(Black) in our model is the indicator function which represents the wage gap, between black male workers and non black male workers. 
+- The factor(Region) controls for regional difference. 
+```{r, results='hide'}
+#| message: false         
+#| warning: false         
+#| error: false  
+test_additive <- lm(Wage ~ factor(Black) + factor(Region) + Education + Experience, data = CPS_1988_wages)
+summary(test_additive)
+```
+
+```{r}
+#| message: false         
+#| warning: false         
+#| error: false  
+
+check_all <- check_model(test_additive, check = c("linearity", "qq", "homogeneity"), panel = FALSE)
+attr(check_all, "show_ci") <- FALSE
+plot(check_all)
+```
+Even though the graphs suggest no major violation, we can see extreme points dragging the whole data to one side, mainly due to high wages, so we will need to add a log function in front of wages. 
+
+## Additive model: 
+
+We will first fit an additive multiple regression model while assuming the wage gap is the same across all regions. We apply the log function to satisfy regression assumptions such as constant variance. In other words without the log, the constant variance and regression assumption might fail, and very high wages could dominate the model. The statistical model below shows the breakdown of our additive model: 
+
+$$log(Wage)=β0​+β1​Black+β2​Region+β3​Education+β4​Experience+ϵ$$
+```{r}
+#| message: false         
+#| warning: false         
+#| error: false  
+
+model_add <- lm(log(Wage) ~ factor(Black) + factor(Region) + Education + Experience, data = CPS_1988_wages)
+summary(model_add)
+```
+
+```{r}
+#| message: false         
+#| warning: false         
+#| error: false  
+
+check_all <- check_model(model_add, check = c("linearity", "qq", "homogeneity"), panel = FALSE)
+attr(check_all, "show_ci") <- FALSE
+plot(check_all)
+```
+
+After Variance, Linearity and QQNormal distribution check, the regression assumption seems much better, and outliers are not dragging the data to one side. 
+
+## Interpretation:
+- Looking at our summary table we can see that we are missing factor(Black)Yes and the region MW. In this case they represent the baseline of our additive model. This translates to the baseline as Black workers in MW(Mid West). Now that we have all our stats from the summary table, we will have to compare the baseline(black workers in MW), $$b0$$ to $$b1*BlackNO$$ the non-black workers. The output for black workers(baseline) is $$log(Wage) = b0$$ while for non black workers, $$log(Wage) = b0 + 0.2131$$ which is from our summary table. We will have to solve for their difference in percentage: $$log(Wage_{nonBlack}) - log(Wage_{Black}) = 0.2131$$. 
+
+$$Wage_{nonBlack} / Wage_{Black} = e^{0.2131}$$
+$$e^{0.2131} = 1.237$$
+$$(1.237 - 1) = 0.237 = 23.7 %$$
+It shows that non Black workers in the same region earn 24% more than Black Workers. Using confidence interval we can assess whether this percentage falls between the parameters of plausible population value. 
+
+```{r}
+#| message: false         
+#| warning: false         
+#| error: false  
+
+confint(model_add)
+```
+The range of plausible value for the wage gap between black workers and non black workers is between 0.188 and 0.238 for the interaction model. In percentage it will be:
+$$e^{0.1877} - 1 = 20.6%$$
+$$e^{0.2385} - 1 = 26.9%$$
+The plausible parameter is between 20.6% and 26.9%. we can conclude that our previous assumption, falls between those parameters. We can also check for the relationship of wage and experience just to assess for the wage gap consistency between black and non-Black workers, through visualizing it.
+
+```{r}
+#| message: false         
+#| warning: false         
+#| error: false  
+
+library(ggplot2)
+
+ggplot(CPS_1988_wages, aes(x = Experience, y = log(Wage), color = Black)) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(title = "Additive Model: Constant Wage Gap") +
+  theme_minimal()
+```
+The plot shows that the two lines are parallel and thus support the additive model's assumption that wage gap between black and non Black workers is constant across all regions.
+
+#### Result for addative model: 
+Holding education, experience and region constant, non black male workers in the same region earn about 24% more than Black male Workers. The standard error associated with the wage gap (factor(Black)No) suggests a small variability which supports that non Black workers relatively get higher wages. In addition our Confidence interval calculations shows the wage gap between Black and non-Black workers is estimated to be between 21% and 27%, holding education, experience and region constant.Our percentage assumption of 24% falls in the range of 21% and 27& computed by the Confidence Interval.Thus non Black male workers in the same region earn 24% more than Black male workers.
+
+## Interaction model: 
+Interaction model is important to allow the wage gap to vary by region. The statistical model equation would now include the interaction term(Black * Region) as shown below:
+
+$$log(Wage)=β0​+β1​Black+β2​Region+β3​(Black×Region)+β4​Education+β5​Experience+ϵ$$ 
+
+```{r}
+#| message: false         
+#| warning: false         
+#| error: false  
+
+model_inter <- lm(log(Wage) ~ factor(Black) * factor(Region) + Education + Experience, data = CPS_1988_wages)
+summary(model_inter)
+```
+
+```{r}
+#| message: false         
+#| warning: false         
+#| error: false  
+
+confint(model_inter)
+```
+$$e^{0.1314} - 1 = 14%$$
+$$e^{0.2542} - 1 = 28.9%$$
+### Interpretation:
+
+The interaction model shows for factor(Black)No = 0.1928, which compares between the black vs non black workers in Midwest region only, due Midwest being the baseline region. Once we convert it, we will have: $$(e^{0.1928} - 1)= 21.3%$$ This means: in the Midwest Non_Black workers earn about 21.3% more than Black_Workers. Compared to the estimate of the baseline, the standard error associated with the baseline is suggesting a small variability(it wouldn't make substantial meaning since the baseline accounts for an individual with 0 experience and education). The range of plausible value for the wage gap between black workers and non black workers is between 0.133(14%) and 0.253(28.9%) for the interaction model. This supports that in the Midwest Non_Black workers can earn about 21.3% more than Black Workers.
+
+```{r}
+#| message: false         
+#| warning: false         
+#| error: false  
+
+ggplot(CPS_1988_wages, aes(x = Experience, y = log(Wage), color = Black)) +
+  geom_smooth(method = "lm", se = TRUE) +
+  facet_wrap(~ Region) +
+  labs(title = "Interaction Model: Wage Gap by Region") +
+  theme_minimal()
+```
+One of the important things this plot shows is that the teal line() representing the wage for non Black workers) is always on top of the red line of the black workers, which shows that there is definitely a wage gap between them and that non-black workers receive higher wages. The difference of the distance between the lines suggests that the wage gap may vary slightly across regions, but we will have to use F-test to see how significant that is.
+
+#### Result for Interaction model: Actual Wage Gaps by Region:
+To calculate for the actual wage gaps by region we will have to add our baseline wage to the rest of the wage gaps by region, as shown by the equation below:
+$$Gap = factor(Black)No + factor(Black)No:factor(Region)$$
+We will have these specific region wages: 
+
+```{r}
+#| message: false         
+#| warning: false         
+#| error: false  
+
+interaction_coef <- coef(model_inter)
+
+MW <- interaction_coef["factor(Black)No"]
+
+NE <- interaction_coef["factor(Black)No"] + interaction_coef["factor(Black)No:factor(Region)NE"]
+
+S  <- interaction_coef["factor(Black)No"] + interaction_coef["factor(Black)No:factor(Region)S"]
+
+W  <- interaction_coef["factor(Black)No"] + interaction_coef["factor(Black)No:factor(Region)W"]
+
+(exp(c(MW=MW, NE=NE, S=S, W=W)) - 1) * 100
+```
+
+# Results for Question 1:
+Interaction model would be the best to assess the different wage gaps in different regions.
+Looking at the interaction terms by region, we can see the percentages of actual difference in pay gaps across different regions, for Black male workers and non Black male workers:
+- For North East non black male workers receive 21.62% more pay.
+- For South non black male workers receive 25.53% higher pay then black male workers.
+- For West non black male workers receive 17.52% more pay than black male workers.
+- For Midwest non black male workers receive 21.26% more pay than black male workers.
+
+Even though the estimated wage gaps differ across regions we have to test whether those differences are statistically significant or not.
+
+# Q2: Magnitude 
+
+## F-test:
+F-test plays an important role to determine whether the wage gap differs by region, holding education and experience constant by comparing the additive and interaction models.
+
+### Hypothesis:
+
+H₀: Wage gap is the same across regions (we only need additive model)
+Hₐ: Wage gap differs across regions (interaction model is needed)
+
+```{r}
+#| message: false         
+#| warning: false         
+#| error: false  
+
+anova(model_inter, model_add)
+```
+## Interpretation:
+In order for p-value to be significant it has to be less than alpha. Alpha will be (0.05). Our anova gives us a p-value of $$0.2264$$ which is not significant, due:
+$$0.2264 > 0.05$$ Thus, we fail to reject our null hypothesis. It suggests that wage gap is roughly the same across regions.
+
+# Result Q2:
+Since we failed to reject our hypothesis, it suggests that there is no statistically significant evidence that the wage gap differs across regions. If we take a look back at the wage gap by region plot, we can see the difference in distance between each pair of line by region is really small compared to each other. That supports our conclusion that there is no statistically significant evidence that the wage gap differs across regions.
+
+## Important thing to Note:
+```{r}
+#| message: false         
+#| warning: false         
+#| error: false  
+
+linearHypothesis(model_inter, "factor(Black)No + factor(Black)No:factor(Region)NE = 0")
+```
+This code looks for the wage gap difference at a specific region. The results show that there is a statistical significant wage gap in North East with non Black workers earning more than black workers, due to p_value < 0.05. This shows us that this could also be true and we could end up with a statistical significant evidence even if there is no statistically significant evidence that wage gaps differ across regions. That is because we are testing for interaction terms for one instance and only testing for NE for the other instance.
+
+# Conclusion: 
+After using various methods such as, F-test, confidence Interval,Plots, and comparing the additive vs interaction model to answer our two primary questions, we conclude that the pay gap Between black male workers and non-Black male workers in each geographic region is the following:
+- For North East non black workers receive 21.62% more pay.
+- For South non black workers receive 25.53% higher pay then black workers.
+- For West non black workers receive 17.52% more pay than black workers.
+- For Midwest non black workers receive 21.26% more pay than black workers.
+However, the magnitude of the pay gap between Black male workers and non-Black male workers doesn't provide statistical significant evidence that wage gaps differ across regions.
+
+
+
+
+
